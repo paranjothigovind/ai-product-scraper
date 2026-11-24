@@ -1,0 +1,17 @@
+node_modules
+.next
+dist
+.env
+.env.local
+*.tsbuildinfo
+__pycache__
+.venv
+.mypy_cache
+.ruff_cache
+.pytest_cache
+*.egg-info
+
+.qodo
+.env.*
+!.env.example
+*.log
