@@ -6,9 +6,12 @@ from scraper.graph.deps import GraphDeps
 from scraper.graph.nodes.trace import NodeFn, trace_info
 from scraper.graph.records import PageRecord
 from scraper.graph.state import INLINE, GraphState, merge_products
+from scraper.html.chunk import chunk_text
 from scraper.html.dom import parse_html
 from scraper.html.jsonld import extract_jsonld
 from scraper.html.microdata import extract_microdata
+from scraper.html.text import render_text
+from scraper.llm.extractor import to_candidates
 from scraper.schemas.error_code import ErrorCode
 from scraper.tools.paginate import paginate
 from scraper.tools.urls import canonical_url, same_site
@@ -82,11 +85,13 @@ def make_ingest(deps: GraphDeps) -> NodeFn:
 def make_prepare(deps: GraphDeps) -> NodeFn:
     async def prepare(state: GraphState) -> dict[str, Any]:
         """Deterministic extraction first: JSON-LD, then microdata.
-        TODO(next): visible-text rendering and ~12k-token chunking for the LLM path (phase 5)."""
+        Visible text is rendered only when an LLM extractor is configured and the page has no
+        structured products, so the common case pays nothing for it."""
         html = state.get("html", "")
         if not html:
             return {
                 "known": [],
+                "cleaned": "",
                 "page_categories": [],
                 "_trace": trace_info(in_count=0, out_count=0),
             }
@@ -96,8 +101,12 @@ def make_prepare(deps: GraphDeps) -> NodeFn:
         md = extract_microdata(doc.root, base)
         known = [p.model_dump(mode="json") for p in [*ld.products, *md.products]]
         categories = [c.model_dump(mode="json") for c in [*ld.categories, *md.categories]]
+        cleaned = ""
+        if deps.extractor is not None and not known:
+            cleaned = render_text(doc.root, base_url=base)
         return {
             "known": known,
+            "cleaned": cleaned,
             "page_categories": categories,
             "_trace": trace_info(
                 in_count=len(html),
@@ -113,12 +122,60 @@ def make_prepare(deps: GraphDeps) -> NodeFn:
 
 def make_extract(deps: GraphDeps) -> NodeFn:
     async def extract(state: GraphState) -> dict[str, Any]:
-        """Deterministic candidates only for now; the LLM extractor joins here in phase 5."""
+        """Structured data wins. Only a page with none falls back to the LLM, chunk by chunk,
+        and only while the run's token budget lasts."""
         known = state.get("known", [])
-        return {
+        cleaned = state.get("cleaned", "")
+        update: dict[str, Any] = {
             "candidates": known,
             "categories": state.get("page_categories", []),
-            "_trace": trace_info(in_count=len(known), out_count=len(known), llm_calls=0),
+            "cleaned": "",  # keep page text out of later checkpoints
+        }
+        if known or not cleaned or deps.extractor is None:
+            return {
+                **update,
+                "_trace": trace_info(in_count=len(known), out_count=len(known), llm_calls=0),
+            }
+
+        budget = dict(state["budget"])
+        limit = deps.limits.max_tokens_per_run
+        candidates: list[dict[str, Any]] = []
+        errors: list[dict[str, Any]] = []
+        calls = 0
+        for chunk in chunk_text(cleaned):
+            if budget["tokens_in"] + budget["tokens_out"] >= limit:
+                break  # `guard` stops the run with stop_reason="budget" on its next pass
+            try:
+                result = await deps.extractor.extract(
+                    chunk, page_url=state.get("final_url"), feedback=state.get("feedback", "")
+                )
+            except ScrapeError as exc:
+                errors.append(
+                    {
+                        "code": exc.code.value,
+                        "url": state.get("final_url"),
+                        "message": exc.message,
+                        "status": exc.status,
+                    }
+                )
+                break
+            calls += 1
+            budget["tokens_in"] += result.tokens_in
+            budget["tokens_out"] += result.tokens_out
+            candidates.extend(to_candidates(result.products))
+        update["candidates"] = candidates
+        update["budget"] = budget
+        if errors:
+            update["errors"] = errors
+        return {
+            **update,
+            "_trace": trace_info(
+                in_count=0,
+                out_count=len(candidates),
+                llm_calls=calls,
+                tokens_in=budget["tokens_in"],
+                tokens_out=budget["tokens_out"],
+            ),
         }
 
     return extract

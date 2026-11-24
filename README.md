@@ -29,6 +29,7 @@ Source is in `backend/src/scraper/`:
 | `ranking/` | Weighted product ranking by rating, review count and completeness |
 | `db/` | SQLAlchemy async models, repository, session, Alembic migrations |
 | `core/` | Settings (validated at startup) and error types |
+| `llm/` | Product extractor behind one interface, with Anthropic and Azure OpenAI backends (structured output), used only for pages with no JSON-LD/microdata products |
 | `agents/`, `api/`, `queue/` | Empty packages reserved for later phases |
 
 ### Requirements
@@ -58,9 +59,11 @@ Settings are loaded from `.env` and validated at startup, so a bad environment f
 
 | Variable | Purpose | Default in `.env.example` |
 | --- | --- | --- |
-| `ANTHROPIC_API_KEY` | Anthropic API key (required) | empty |
-| `MODEL_EXTRACT`, `MODEL_JUDGE` | Models for extraction and judging | `claude-haiku-5-5` |
-| `MODEL_ESCALATE` | Model used when escalating a retry | `claude-sonnet-5-5` |
+| `LLM_PROVIDER` | `anthropic` or `azure` | `azure` |
+| `ANTHROPIC_API_KEY` | Anthropic key (required when provider is `anthropic`) | empty |
+| `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_API_VERSION` | Azure OpenAI / Foundry resource (required when provider is `azure`) | empty |
+| `MODEL_EXTRACT`, `MODEL_JUDGE` | Model ids, or Azure deployment names | `gpt-4o-mini` |
+| `MODEL_ESCALATE` | Model used when escalating a retry (not wired yet) | `gpt-4o-mini` |
 | `DATABASE_URL` | Postgres DSN (`postgresql+asyncpg://`) | local compose Postgres |
 | `REDIS_URL` | Redis URL | `redis://localhost:6379` |
 | `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Object storage for raw HTML | local MinIO |
@@ -110,7 +113,7 @@ The client currently renders a placeholder page.
 
 Open items are tracked as `TODO(next)` comments in the code. The main ones:
 
-- **Phase 5:** LLM extraction path (visible-text chunking), retry with feedback and model escalation from `evaluate`
+- **Phase 5 (remaining):** retry with feedback and model escalation from `evaluate` (the LLM extraction path itself is done), cost tracking in USD
 - **Phase 7:** Redis-backed cross-process rate limiting, conditional GET and caching, circuit breaker, Playwright rendering tier
 - **Phase 8:** Link discovery and navigation across listing pages
 - **Phase 9:** Client scrape form

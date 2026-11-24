@@ -13,6 +13,8 @@ dependencies = [
     "langgraph>=1.2.24",
     "langgraph-checkpoint-postgres>=3.2.1",
     "psycopg[binary,pool]>=3.3.9",
+    "anthropic>=2.13.0",
+    "openai>=3.58.0",
 ]
 
 [dependency-groups]

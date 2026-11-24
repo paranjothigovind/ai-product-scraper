@@ -1,7 +1,15 @@
 from functools import lru_cache
-from typing import Any
+from typing import Any, Literal, Self
 
-from pydantic import Field, HttpUrl, PostgresDsn, RedisDsn, SecretStr, ValidationError
+from pydantic import (
+    Field,
+    HttpUrl,
+    PostgresDsn,
+    RedisDsn,
+    SecretStr,
+    ValidationError,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,7 +18,13 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    anthropic_api_key: SecretStr
+    # Which LLM backs extraction. MODEL_* names are model ids for "anthropic" and Azure
+    # deployment names for "azure".
+    llm_provider: Literal["anthropic", "azure"] = "anthropic"
+    anthropic_api_key: SecretStr | None = None
+    azure_openai_endpoint: HttpUrl | None = None
+    azure_openai_api_key: SecretStr | None = None
+    azure_openai_api_version: str = "2024-10-21"
     model_extract: str = Field(min_length=1)
     model_judge: str = Field(min_length=1)
     model_escalate: str = Field(min_length=1)
@@ -34,6 +48,20 @@ class Settings(BaseSettings):
     max_tokens_per_run: int = Field(default=200_000, ge=1)
     min_quality: float = Field(default=0.75, ge=0, le=1)
     plan_cap_products: int = Field(default=500, ge=1)
+
+    @model_validator(mode="after")
+    def _provider_credentials(self) -> Self:
+        if self.llm_provider == "anthropic":
+            missing = [] if self.anthropic_api_key else ["anthropic_api_key"]
+        else:
+            missing = [
+                name
+                for name in ("azure_openai_endpoint", "azure_openai_api_key")
+                if getattr(self, name) is None
+            ]
+        if missing:
+            raise ValueError(f"required for llm_provider={self.llm_provider}: {', '.join(missing)}")
+        return self
 
 
 class ConfigError(RuntimeError):

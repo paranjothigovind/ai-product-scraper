@@ -45,7 +45,7 @@ def test_invalid_env_names_the_field_but_never_echoes_values(
     with pytest.raises(ConfigError) as exc:
         load_settings(_env_file=None)
     text = str(exc.value)
-    assert "anthropic_api_key" in text
+    assert "model_extract" in text
     assert "database_url" in text
     assert "hunter2" not in text
 
@@ -53,4 +53,39 @@ def test_invalid_env_names_the_field_but_never_echoes_values(
 def test_secrets_are_masked(monkeypatch: pytest.MonkeyPatch) -> None:
     s = load(monkeypatch)
     assert "sk-test-secret" not in repr(s)
+    assert s.anthropic_api_key is not None
     assert s.anthropic_api_key.get_secret_value() == "sk-test-secret"
+
+
+def test_azure_provider_needs_azure_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    with pytest.raises(ConfigError, match="azure_openai_endpoint"):
+        load(monkeypatch, LLM_PROVIDER="azure", ANTHROPIC_API_KEY="")
+
+
+def test_azure_provider_does_not_need_anthropic_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    s = load(
+        monkeypatch,
+        LLM_PROVIDER="azure",
+        ANTHROPIC_API_KEY="",
+        AZURE_OPENAI_ENDPOINT="https://r.openai.azure.com",
+        AZURE_OPENAI_API_KEY="k",
+    )
+    assert s.llm_provider == "azure"
+
+
+def test_factory_builds_each_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    from scraper.llm import AnthropicExtractor, AzureOpenAIExtractor, build_extractor
+
+    assert isinstance(build_extractor(load(monkeypatch)), AnthropicExtractor)
+    azure = load(
+        monkeypatch,
+        LLM_PROVIDER="azure",
+        AZURE_OPENAI_ENDPOINT="https://r.openai.azure.com",
+        AZURE_OPENAI_API_KEY="k",
+    )
+    assert isinstance(build_extractor(azure), AzureOpenAIExtractor)
+
+
+def test_anthropic_provider_needs_its_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    with pytest.raises(ConfigError, match="anthropic_api_key"):
+        load(monkeypatch, ANTHROPIC_API_KEY="")

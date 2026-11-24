@@ -49,7 +49,7 @@ class GraphState(TypedDict, total=False):
     final_url: str | None
 
     html: str
-    cleaned: str  # TODO(next): visible text for the LLM path (phase 5)
+    cleaned: str  # visible text for the LLM path; empty unless an LLM may be needed
     known: list[Record]  # deterministic (JSON-LD / microdata) candidates for the current page
     page_categories: list[Record]
     candidates: list[Record]

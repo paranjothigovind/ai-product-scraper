@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from scraper.core.config import Settings
 from scraper.eval.config import EvalConfig
 from scraper.graph.records import PageRecord, RunOutcome, TraceRecord
+from scraper.llm.extractor import LLMExtractor
 from scraper.ranking.score import RankWeights
 from scraper.schemas.eval import EvalReport
 from scraper.schemas.product import Category, RankedProduct
@@ -80,6 +81,7 @@ class GraphDeps:
         limits: RunLimits | None = None,
         control: RunControl | None = None,
         events: EventSink | None = None,
+        extractor: LLMExtractor | None = None,
         eval_config: EvalConfig | None = None,
         rank_weights: RankWeights | None = None,
         clock: Callable[[], float] = time.time,
@@ -89,6 +91,7 @@ class GraphDeps:
         self.limits = limits or RunLimits()
         self.control: RunControl = control or NeverCancelled()
         self.events: EventSink = events or NullEvents()
+        self.extractor = extractor
         self.eval_config = eval_config or EvalConfig()
         self.rank_weights = rank_weights or RankWeights()
         self.clock = clock
