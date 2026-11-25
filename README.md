@@ -2,7 +2,7 @@
 
 Scrapes product listings from a URL (or pasted HTML), validates and scores the results, ranks the products, and stores each run in Postgres. The crawl is a LangGraph state machine with checkpointing, so a crashed run resumes from its last checkpoint.
 
-> **Status: work in progress.** The Python backend is built through phase 7 except production hardening: HTML and LLM extraction, the crawl graph, persistence, evaluation and ranking, an HTTP API and a worker. The client UI is not built yet (see [Roadmap](#roadmap)).
+> **Status: work in progress.** The Python backend is built through phase 7 except production hardening: HTML and LLM extraction, the crawl graph, persistence, evaluation and ranking, an HTTP API and a worker. There is a basic client UI; see [Roadmap](#roadmap) for what is left.
 
 ## Repository layout
 
@@ -133,14 +133,18 @@ Add a new migration with `uv run alembic revision -m "..."`.
 
 ## Client
 
+A Next.js app: a form (web address or pasted HTML, how many products, scope, optional limits), live status while the run is queued and scraping, a cancel button, and the ranked results with CSV and JSON download.
+
+The browser only talks to the client's own `/api/scrapes` routes. Those forward to the backend and add `API_TOKEN` on the server, so the token never reaches the browser and there is no CORS to set up.
+
 ```bash
 cd client
-cp .env.example .env.local       # NEXT_PUBLIC_API_URL, default http://localhost:8000
+cp .env.example .env.local       # API_URL (default http://localhost:8000) and API_TOKEN
 pnpm install
-pnpm dev                         # also: build, lint, typecheck
+pnpm dev                         # http://localhost:3000; also: build, start, lint, typecheck
 ```
 
-The client currently renders a placeholder page.
+Start the backend API and a worker first (see [Running it](#running-it)), or submissions will report that the API is not reachable. `pnpm` can be run without installing it as `npx pnpm@9 ...`.
 
 ## Roadmap
 
@@ -149,7 +153,7 @@ Open items are tracked as `TODO(next)` comments in the code. The main ones:
 - **Phase 5 (remaining):** cost tracking in USD
 - **Phase 7 (remaining):** Redis-backed cross-process rate limiting, conditional GET and caching, circuit breaker, Playwright rendering tier
 - **Phase 8:** Link discovery and navigation across listing pages
-- **Phase 9:** Client scrape form
+- **Client:** live progress while a run is going (the API does not stream events yet), a history of past runs, sign-in
 - Dockerfiles, and API/worker/client services in `docker-compose.yml`
 - Live progress to the client (the graph already emits events; the API does not stream them yet) and real multi-user authentication
 - Separate API/worker database roles; the egress proxy must enforce the same IP blocklist as the SSRF guard
