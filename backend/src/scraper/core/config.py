@@ -16,7 +16,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Validated once at startup; a bad environment fails before any work starts."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        # Works from the repo root and from backend/; a later file overrides an earlier one.
+        env_file=("../.env", ".env"),
+        extra="ignore",
+    )
 
     # Which LLM backs extraction. MODEL_* names are model ids for "anthropic" and Azure
     # deployment names for "azure".

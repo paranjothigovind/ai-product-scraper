@@ -16,7 +16,7 @@ class AzureOpenAIExtractor:
     """`model` is the Azure *deployment name*, which is whatever you called the deployment."""
 
     def __init__(
-        self, client: openai.AsyncAzureOpenAI, model: str, *, max_output_tokens: int = 8000
+        self, client: openai.AsyncOpenAI, model: str, *, max_output_tokens: int = 8000
     ) -> None:
         self._client = client
         self._model = model

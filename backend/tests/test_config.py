@@ -89,3 +89,20 @@ def test_factory_builds_each_provider(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_anthropic_provider_needs_its_key(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(ConfigError, match="anthropic_api_key"):
         load(monkeypatch, ANTHROPIC_API_KEY="")
+
+
+def test_factory_uses_plain_client_for_v1_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    import openai
+
+    from scraper.llm import build_extractor
+
+    s = load(
+        monkeypatch,
+        LLM_PROVIDER="azure",
+        AZURE_OPENAI_ENDPOINT="https://r.openai.azure.com/openai/v1",
+        AZURE_OPENAI_API_KEY="k",
+    )
+    ex = build_extractor(s)
+    client = ex._client  # type: ignore[attr-defined]
+    assert not isinstance(client, openai.AsyncAzureOpenAI)
+    assert str(client.base_url).endswith("/openai/v1/")
