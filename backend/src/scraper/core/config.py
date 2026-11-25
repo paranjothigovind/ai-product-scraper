@@ -46,6 +46,15 @@ class Settings(BaseSettings):
     user_agent: str = "AIProductScraperBot/0.1 (+https://example.com/bot)"
     egress_proxy_url: HttpUrl | None = None
 
+    # API. With no token the API is open, which is only appropriate on localhost.
+    api_token: SecretStr | None = None
+    cors_origins: list[str] = ["http://localhost:3000"]
+
+    # Worker.
+    worker_concurrency: int = Field(default=2, ge=1)
+    job_lease_seconds: float = Field(default=60.0, gt=0)
+    job_max_attempts: int = Field(default=3, ge=1)
+
     max_pages_total: int = Field(default=50, ge=1)
     max_retries: int = Field(default=2, ge=0)
     # TODO(next): spec gave no default; placeholder until the extractor phase measures real usage.

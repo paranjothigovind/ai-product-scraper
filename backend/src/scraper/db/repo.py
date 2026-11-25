@@ -45,6 +45,7 @@ async def create_run(
         source_url=str(request.url) if request.url else None,
         requested=request.max_products,
         schema_version=SCHEMA_VERSION,
+        request=request.model_dump(mode="json", exclude_none=True),
     )
     session.add(run)
     await session.flush()

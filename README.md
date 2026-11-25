@@ -2,7 +2,7 @@
 
 Scrapes product listings from a URL (or pasted HTML), validates and scores the results, ranks the products, and stores each run in Postgres. The crawl is a LangGraph state machine with checkpointing, so a crashed run resumes from its last checkpoint.
 
-> **Status: work in progress.** The Python backend is built through phase 4: HTML extraction, the crawl graph, persistence, evaluation and ranking. The LLM extractor, the HTTP API, the job queue and the client UI are not built yet (see [Roadmap](#roadmap)).
+> **Status: work in progress.** The Python backend is built through phase 7 except production hardening: HTML and LLM extraction, the crawl graph, persistence, evaluation and ranking, an HTTP API and a worker. The client UI is not built yet (see [Roadmap](#roadmap)).
 
 ## Repository layout
 
@@ -30,7 +30,10 @@ Source is in `backend/src/scraper/`:
 | `db/` | SQLAlchemy async models, repository, session, Alembic migrations |
 | `core/` | Settings (validated at startup) and error types |
 | `llm/` | Product extractor behind one interface, with Anthropic and Azure OpenAI backends (structured output), used only for pages with no JSON-LD/microdata products |
-| `agents/`, `api/`, `queue/` | Empty packages reserved for later phases |
+| `api/` | FastAPI app: submit, poll and cancel scrapes |
+| `queue/` | Job queue on the `runs` table: enqueue, claim with a lease, heartbeat, cancel |
+| `worker.py` | Worker process that claims queued runs and drives the graph |
+| `agents/` | Empty, reserved for later phases |
 
 ### Requirements
 
@@ -53,6 +56,30 @@ uv sync
 uv run alembic upgrade head
 ```
 
+### Running it
+
+```bash
+cd backend
+uv run uvicorn scraper.api.app:create_app_from_env --factory --port 8000   # API
+uv run python -m scraper.worker                                           # worker (run as many as you like)
+```
+
+```bash
+# submit (returns 202 and an id), then poll
+curl -X POST localhost:8000/v1/scrapes -H "Content-Type: application/json"      -H "Idempotency-Key: my-first-run"      -d '{"url": "https://example.com/products", "max_products": 20}'
+curl localhost:8000/v1/scrapes/<id>
+curl -X POST localhost:8000/v1/scrapes/<id>/cancel
+```
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /v1/scrapes` | Queue a scrape (`url` or `html`, plus the fields below). `Idempotency-Key` header makes retries safe |
+| `GET /v1/scrapes/{id}` | Status; once finished, ranked products and categories |
+| `POST /v1/scrapes/{id}/cancel` | Cancel a queued run at once, or stop a running one |
+| `GET /healthz` | Liveness |
+
+If `API_TOKEN` is set, send `Authorization: Bearer <token>`. Every run belongs to one built-in user until real authentication exists. A run's lease is renewed while a worker is on it; if the worker dies, another worker resumes the run from its last checkpoint, up to `JOB_MAX_ATTEMPTS`.
+
 Settings are loaded from `.env` and validated at startup, so a bad environment fails before any work starts.
 
 ### Configuration
@@ -67,6 +94,9 @@ Settings are loaded from `.env` and validated at startup, so a bad environment f
 | `DATABASE_URL` | Postgres DSN (`postgresql+asyncpg://`) | local compose Postgres (port 5433) |
 | `REDIS_URL` | Redis URL | `redis://localhost:6379` |
 | `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Object storage for raw HTML | local S3 mock |
+| `API_TOKEN` | Bearer token for the API (empty means open) | empty |
+| `CORS_ORIGINS` | Allowed browser origins, as a JSON list | `["http://localhost:3000"]` |
+| `WORKER_CONCURRENCY`, `JOB_LEASE_SECONDS`, `JOB_MAX_ATTEMPTS` | Worker parallelism, lease length and attempts per run | `2`, `60`, `3` |
 | `MAX_PAGES_TOTAL` | Page cap per run | `50` |
 | `MAX_RETRIES` | Extraction retries | `2` |
 | `MAX_TOKENS_PER_RUN` | Token budget per run | `200000` |
@@ -92,6 +122,9 @@ Unknown fields are rejected.
 cd backend
 uv run pytest                    # unit tests
 uv run pytest -m integration     # needs Postgres (TEST_DATABASE_URL, or Docker via testcontainers)
+# use a separate database so tests never touch real jobs:
+#   docker exec <postgres-container> psql -U scraper -c "CREATE DATABASE scraper_test"
+#   TEST_DATABASE_URL=postgresql+asyncpg://scraper:scraper@localhost:5433/scraper_test
 uv run ruff check .
 uv run mypy                      # strict
 ```
@@ -114,8 +147,9 @@ The client currently renders a placeholder page.
 Open items are tracked as `TODO(next)` comments in the code. The main ones:
 
 - **Phase 5 (remaining):** cost tracking in USD
-- **Phase 7:** Redis-backed cross-process rate limiting, conditional GET and caching, circuit breaker, Playwright rendering tier
+- **Phase 7 (remaining):** Redis-backed cross-process rate limiting, conditional GET and caching, circuit breaker, Playwright rendering tier
 - **Phase 8:** Link discovery and navigation across listing pages
 - **Phase 9:** Client scrape form
-- API, worker and client services in `docker-compose.yml` once their Dockerfiles exist
+- Dockerfiles, and API/worker/client services in `docker-compose.yml`
+- Live progress to the client (the graph already emits events; the API does not stream them yet) and real multi-user authentication
 - Separate API/worker database roles; the egress proxy must enforce the same IP blocklist as the SSRF guard

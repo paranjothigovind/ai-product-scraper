@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     Float,
@@ -46,6 +47,7 @@ class Run(Base):
         ),
         CheckConstraint("input_type IN ('url', 'html')", name="ck_runs_input_type"),
         Index("runs_user_created_idx", "user_id", "created_at"),
+        Index("runs_queue_idx", "status", "lease_expires_at"),
         # NULL keys never collide, so runs without an idempotency key are unaffected.
         UniqueConstraint("user_id", "idempotency_key", name="runs_user_idem_key"),
     )
@@ -71,6 +73,15 @@ class Run(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Job queue: the worker claims a row by taking a lease and renews it while it works. A
+    # crashed worker's lease expires and another worker resumes from the checkpoint.
+    request: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    claimed_by: Mapped[str | None] = mapped_column(Text)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    cancel_requested: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
 
 
 class RunPage(Base):
