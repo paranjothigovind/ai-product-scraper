@@ -113,7 +113,7 @@ The client currently renders a placeholder page.
 
 Open items are tracked as `TODO(next)` comments in the code. The main ones:
 
-- **Phase 5 (remaining):** include image URLs in the text the LLM sees (retries ask for images it cannot see), cost tracking in USD
+- **Phase 5 (remaining):** cost tracking in USD
 - **Phase 7:** Redis-backed cross-process rate limiting, conditional GET and caching, circuit breaker, Playwright rendering tier
 - **Phase 8:** Link discovery and navigation across listing pages
 - **Phase 9:** Client scrape form

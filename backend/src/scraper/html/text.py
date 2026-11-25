@@ -80,9 +80,30 @@ def _link(href: str | None, base_url: str | None) -> str | None:
     return absolute if urlparse(absolute).scheme in ("http", "https") else None
 
 
-def render_text(root: Node, *, base_url: str | None = None, include_links: bool = True) -> str:
-    """Visible text, one block per line. Links render as `text [absolute-url]` so the model
-    can see product URLs without ever seeing markup."""
+# Lazy-loading libraries keep the real image here and put a placeholder in `src`.
+_IMAGE_ATTRS = ("data-src", "data-original", "data-lazy-src", "src")
+
+
+def _image_url(node: Node, base_url: str | None) -> str | None:
+    if node.attrs.get("width", "").strip() == "1" or node.attrs.get("height", "").strip() == "1":
+        return None  # tracking pixel
+    for name in _IMAGE_ATTRS:
+        url = _link(node.attrs.get(name), base_url)  # drops data: URIs and non-http schemes
+        if url:
+            return url
+    return None
+
+
+def render_text(
+    root: Node,
+    *,
+    base_url: str | None = None,
+    include_links: bool = True,
+    include_images: bool = False,
+) -> str:
+    """Visible text, one block per line. Links render as `text [absolute-url]` and, when
+    asked, images as `[image: absolute-url]`, so the model can see URLs without ever seeing
+    markup."""
     out: list[str] = []
     stack: list[tuple[Node, bool]] = [(root, False)]  # (node, is_exit)
     while stack:
@@ -100,6 +121,11 @@ def render_text(root: Node, *, base_url: str | None = None, include_links: bool 
                 out.append("\n")
             continue
         if node.is_element and (node.tag in SKIP_TAGS or is_hidden(node)):
+            continue
+        if node.tag == "img":
+            image = _image_url(node, base_url) if include_images else None
+            if image:
+                out.append(f" [image: {image}] ")
             continue
         if node.tag in _BLOCK_TAGS:
             out.append("\n")

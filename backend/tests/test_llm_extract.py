@@ -184,3 +184,25 @@ async def test_invented_urls_are_dropped_before_validation() -> None:
     assert {p["name"] for p in result_of(state)["products"]} == {"Blue Mug"}
     extract = next(t for t in state["trace"] if t["node"] == "extract")
     assert extract["meta"]["ungrounded_dropped"] == 1
+
+
+async def test_invented_image_is_dropped_but_the_product_is_kept() -> None:
+    class Ex(FakeExtractor):
+        async def extract(
+            self, text: str, *, page_url: str | None, feedback: str = ""
+        ) -> ExtractionResult:
+            return ExtractionResult(
+                products=[
+                    ExtractedProduct(
+                        name="Blue Mug",
+                        url=f"{BASE}/p/1",
+                        price=12.5,
+                        image=f"{BASE}/img/invented.jpg",
+                    )
+                ]
+            )
+
+    h = Harness(ScriptedSite({LIST: PLAIN}), extractor=Ex())
+    state = await h.run(request(5))
+    [product] = result_of(state)["products"]
+    assert product["name"] == "Blue Mug" and product["image"] is None

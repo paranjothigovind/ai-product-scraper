@@ -85,3 +85,23 @@ def test_unicode_and_broken_entities_do_not_crash() -> None:
     assert text("<p>&zzznotreal; ünïcödé 日本語 &#xZZ; &#99999999;</p>").startswith(
         "&zzznotreal; ünïcödé"
     )
+
+
+def test_images_render_only_when_asked_and_resolve_against_base() -> None:
+    html = '<div><a href="/p/1">Mug</a><img src="/img/1.jpg" alt="x"></div>'
+    assert text(html, base_url="https://s.test/list") == "Mug [https://s.test/p/1]"
+    assert (
+        text(html, base_url="https://s.test/list", include_images=True)
+        == "Mug [https://s.test/p/1] [image: https://s.test/img/1.jpg]"
+    )
+
+
+def test_lazy_images_use_the_real_source_and_skip_placeholders_and_pixels() -> None:
+    html = (
+        '<img src="data:image/gif;base64,AAAA" data-src="/real.jpg">'
+        '<img src="data:image/gif;base64,BBBB">'
+        '<img src="/pixel.gif" width="1" height="1">'
+        '<img src="/hidden.jpg" style="display:none">'
+    )
+    out = text(html, base_url="https://s.test/", include_images=True)
+    assert out == "[image: https://s.test/real.jpg]"

@@ -102,7 +102,7 @@ def make_prepare(deps: GraphDeps) -> NodeFn:
         categories = [c.model_dump(mode="json") for c in [*ld.categories, *md.categories]]
         cleaned = ""
         if deps.extractor is not None and not known:
-            cleaned = render_text(doc.root, base_url=base)
+            cleaned = render_text(doc.root, base_url=base, include_images=True)
         return {
             "known": known,
             "cleaned": cleaned,

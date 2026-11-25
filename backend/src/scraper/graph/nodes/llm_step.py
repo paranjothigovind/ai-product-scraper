@@ -52,5 +52,10 @@ async def run_llm(
         # The model must not invent links: a URL it returns has to appear in the text it saw.
         grounded = [p for p in result.products if p.url.strip() in chunk]
         run.ungrounded += len(result.products) - len(grounded)
+        # Same for images, but a bad image only loses the image, not the product.
+        for product in grounded:
+            if product.image and product.image.strip() not in chunk:
+                product.image = None
+                run.ungrounded += 1
         run.candidates.extend(to_candidates(grounded))
     return run
