@@ -6,7 +6,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from scraper.graph.deps import GraphDeps
 from scraper.graph.nodes import make_nodes
-from scraper.graph.routing import route_after_guard, route_after_pick
+from scraper.graph.routing import route_after_evaluate, route_after_guard, route_after_pick
 from scraper.graph.state import GraphState
 
 
@@ -28,6 +28,9 @@ def build_graph(
     graph.add_conditional_edges(
         "pick", route_after_pick, {"ingest": "ingest", "truncate": "truncate"}
     )
+    graph.add_conditional_edges(
+        "evaluate", route_after_evaluate, {"retry_extract": "retry_extract", "rank": "rank"}
+    )
     for a, b in [
         ("ingest", "prepare"),
         ("prepare", "extract"),
@@ -35,7 +38,7 @@ def build_graph(
         ("paginate", "validate"),
         ("validate", "guard"),
         ("truncate", "evaluate"),
-        ("evaluate", "rank"),
+        ("retry_extract", "truncate"),
         ("rank", "persist"),
         ("persist", "finalize"),
         ("finalize", END),

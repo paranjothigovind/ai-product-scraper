@@ -2,6 +2,7 @@ from typing import Any
 
 from scraper.eval.metrics import build_report
 from scraper.graph.deps import GraphDeps
+from scraper.graph.nodes.retry import can_retry
 from scraper.graph.nodes.trace import NodeFn, trace_info
 from scraper.graph.outcome import build_outcome, build_result
 from scraper.graph.records import PageRecord, TraceRecord
@@ -36,8 +37,7 @@ def make_evaluate(deps: GraphDeps) -> NodeFn:
             limit=state["limit"],
             allowed_host=state.get("allowed_host"),
             min_quality=deps.limits.min_quality,
-            # TODO(next): retry with feedback and model escalation arrives with the LLM (phase 5).
-            can_retry=False,
+            can_retry=can_retry(state, deps),
             cfg=deps.eval_config,
         )
         return {

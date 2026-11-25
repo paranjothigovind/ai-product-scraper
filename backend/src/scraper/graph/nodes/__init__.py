@@ -14,6 +14,7 @@ from scraper.graph.nodes.finish import (
     make_rank,
     make_truncate,
 )
+from scraper.graph.nodes.retry import make_retry_extract
 from scraper.graph.nodes.trace import NodeFn, traced
 
 
@@ -29,6 +30,7 @@ def make_nodes(deps: GraphDeps) -> dict[str, NodeFn]:
         "validate": make_validate,
         "truncate": make_truncate,
         "evaluate": make_evaluate,
+        "retry_extract": make_retry_extract,
         "rank": make_rank,
         "persist": make_persist,
         "finalize": make_finalize,

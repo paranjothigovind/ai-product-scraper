@@ -39,6 +39,7 @@ async def main() -> None:
         store=MemoryStore(),
         limits=RunLimits.from_settings(settings),
         extractor=build_extractor(settings),
+        escalation_extractor=build_extractor(settings, settings.model_escalate),
     )
     graph = build_graph(deps, MemorySaver())
     request = ScrapeRequest.model_validate(
@@ -55,8 +56,10 @@ async def main() -> None:
     print(f"tokens in/out: {budget['tokens_in']}/{budget['tokens_out']}")
     print(f"validation: {state['validation']}")
     print(f"errors: {state.get('errors')}")
-    llm = [t for t in state["trace"] if t["node"] == "extract"]
-    print(f"extract meta: {[t['meta'] for t in llm]}")
+    for t in state["trace"]:
+        if t["node"] in ("extract", "retry_extract"):
+            print(f"{t['node']}: {t['meta']}")
+    print(f"retries used: {state.get('retries', 0)}")
     ev = state["evaluation"]
     print(f"quality score={ev['score']:.2f} decision={ev['decision']} issues={ev['issues']}")
     for p in result["products"]:

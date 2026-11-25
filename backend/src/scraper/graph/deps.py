@@ -82,6 +82,7 @@ class GraphDeps:
         control: RunControl | None = None,
         events: EventSink | None = None,
         extractor: LLMExtractor | None = None,
+        escalation_extractor: LLMExtractor | None = None,
         eval_config: EvalConfig | None = None,
         rank_weights: RankWeights | None = None,
         clock: Callable[[], float] = time.time,
@@ -92,6 +93,8 @@ class GraphDeps:
         self.control: RunControl = control or NeverCancelled()
         self.events: EventSink = events or NullEvents()
         self.extractor = extractor
+        # Stronger model used from the second retry on; falls back to `extractor`.
+        self.escalation_extractor = escalation_extractor or extractor
         self.eval_config = eval_config or EvalConfig()
         self.rank_weights = rank_weights or RankWeights()
         self.clock = clock

@@ -67,6 +67,8 @@ def _issues(products: Sequence[Product], cfg: EvalConfig, metrics: EvalMetrics) 
         )
     if n == 0:
         issues.append("no products found")
+    elif metrics.volume < 1:
+        issues.append(f"only {n} products found; the page may list more, so check every product")
     return issues
 
 
@@ -102,7 +104,8 @@ def build_report(
 
     issues = _issues(products, cfg, metrics)
     if not products:
-        decision = "low_confidence"  # nothing to improve on by retrying deterministically
+        # Only a caller that has something new to try (an LLM pass) passes can_retry=True.
+        decision = "retry" if can_retry else "low_confidence"
     elif score >= min_quality:
         decision = "accept"
     else:

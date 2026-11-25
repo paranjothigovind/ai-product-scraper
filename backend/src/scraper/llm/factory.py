@@ -6,8 +6,10 @@ from scraper.llm.azure import AzureOpenAIExtractor
 from scraper.llm.extractor import AnthropicExtractor, LLMExtractor
 
 
-def build_extractor(settings: Settings) -> LLMExtractor:
-    """The extractor for `settings.llm_provider`, using MODEL_EXTRACT as its model."""
+def build_extractor(settings: Settings, model: str | None = None) -> LLMExtractor:
+    """The extractor for `settings.llm_provider`; `model` defaults to MODEL_EXTRACT (pass
+    `settings.model_escalate` for the stronger retry model)."""
+    model = model or settings.model_extract
     if settings.llm_provider == "azure":
         assert settings.azure_openai_endpoint and settings.azure_openai_api_key  # noqa: S101  # validated by Settings
         endpoint = str(settings.azure_openai_endpoint).rstrip("/")
@@ -22,9 +24,9 @@ def build_extractor(settings: Settings) -> LLMExtractor:
                 api_key=key,
                 api_version=settings.azure_openai_api_version,
             )
-        return AzureOpenAIExtractor(client, settings.model_extract)
+        return AzureOpenAIExtractor(client, model)
     assert settings.anthropic_api_key  # noqa: S101  # validated by Settings
     return AnthropicExtractor(
         anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key.get_secret_value()),
-        settings.model_extract,
+        model,
     )

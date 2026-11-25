@@ -53,6 +53,7 @@ class GraphState(TypedDict, total=False):
     known: list[Record]  # deterministic (JSON-LD / microdata) candidates for the current page
     page_categories: list[Record]
     candidates: list[Record]
+    llm_pages: Annotated[list[Record], operator.add]  # {url, text} kept for retries
     products: Annotated[list[Record], merge_products]
     categories: Annotated[list[Record], merge_categories]
     selected: list[Record]

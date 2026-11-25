@@ -3,15 +3,14 @@ from urllib.parse import urlsplit
 
 from scraper.core.errors import ScrapeError
 from scraper.graph.deps import GraphDeps
+from scraper.graph.nodes.llm_step import MAX_RETRY_TEXT_CHARS, run_llm
 from scraper.graph.nodes.trace import NodeFn, trace_info
 from scraper.graph.records import PageRecord
 from scraper.graph.state import INLINE, GraphState, merge_products
-from scraper.html.chunk import chunk_text
 from scraper.html.dom import parse_html
 from scraper.html.jsonld import extract_jsonld
 from scraper.html.microdata import extract_microdata
 from scraper.html.text import render_text
-from scraper.llm.extractor import to_candidates
 from scraper.schemas.error_code import ErrorCode
 from scraper.tools.paginate import paginate
 from scraper.tools.urls import canonical_url, same_site
@@ -138,46 +137,30 @@ def make_extract(deps: GraphDeps) -> NodeFn:
             }
 
         budget = dict(state["budget"])
-        limit = deps.limits.max_tokens_per_run
-        candidates: list[dict[str, Any]] = []
-        errors: list[dict[str, Any]] = []
-        calls = 0
-        ungrounded = 0
-        for chunk in chunk_text(cleaned):
-            if budget["tokens_in"] + budget["tokens_out"] >= limit:
-                break  # `guard` stops the run with stop_reason="budget" on its next pass
-            try:
-                result = await deps.extractor.extract(
-                    chunk, page_url=state.get("final_url"), feedback=state.get("feedback", "")
-                )
-            except ScrapeError as exc:
-                errors.append(
-                    {
-                        "code": exc.code.value,
-                        "url": state.get("final_url"),
-                        "message": exc.message,
-                        "status": exc.status,
-                    }
-                )
-                break
-            calls += 1
-            budget["tokens_in"] += result.tokens_in
-            budget["tokens_out"] += result.tokens_out
-            # The model must not invent links: a URL it returns has to appear in the text it saw.
-            grounded = [p for p in result.products if p.url.strip() in chunk]
-            ungrounded += len(result.products) - len(grounded)
-            candidates.extend(to_candidates(grounded))
-        update["candidates"] = candidates
+        page_url = state.get("final_url")
+        run = await run_llm(
+            deps.extractor,
+            cleaned,
+            page_url=page_url,
+            feedback=state.get("feedback", ""),
+            budget=budget,
+            token_limit=deps.limits.max_tokens_per_run,
+        )
+        update["candidates"] = run.candidates
         update["budget"] = budget
-        if errors:
-            update["errors"] = errors
+        if run.errors:
+            update["errors"] = run.errors
+        # Keep the text so a low-quality result can be retried with feedback (bounded).
+        kept = sum(len(p["text"]) for p in state.get("llm_pages", []))
+        if kept + len(cleaned) <= MAX_RETRY_TEXT_CHARS:
+            update["llm_pages"] = [{"url": page_url, "text": cleaned}]
         return {
             **update,
             "_trace": trace_info(
                 in_count=0,
-                out_count=len(candidates),
-                llm_calls=calls,
-                ungrounded_dropped=ungrounded,
+                out_count=len(run.candidates),
+                llm_calls=run.calls,
+                ungrounded_dropped=run.ungrounded,
                 tokens_in=budget["tokens_in"],
                 tokens_out=budget["tokens_out"],
             ),

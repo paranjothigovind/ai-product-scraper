@@ -24,7 +24,7 @@ Source is in `backend/src/scraper/`:
 | `html/` | Hostile-input-safe HTML parsing: decoding, DOM, CSS selectors, JSON-LD, microdata, schema.org, text and value normalisation |
 | `tools/` | `scrape_html` (fetch and extract), `paginate`, `validate_products`, URL helpers |
 | `security/` | SSRF protection, `robots.txt` handling, per-domain rate limiting |
-| `graph/` | LangGraph crawl: `init → guard → pick → ingest → prepare → extract → paginate → validate`, looping until a limit is hit, then `truncate → evaluate → rank → persist → finalize`. Includes the Postgres checkpointer and `run_graph`, which starts or resumes a run |
+| `graph/` | LangGraph crawl (a low-quality LLM result is retried with the evaluator's feedback, escalating to `MODEL_ESCALATE` on the second retry): `init → guard → pick → ingest → prepare → extract → paginate → validate`, looping until a limit is hit, then `truncate → evaluate → rank → persist → finalize`. Includes the Postgres checkpointer and `run_graph`, which starts or resumes a run |
 | `eval/` | Quality metrics (schema validity, field coverage, plausibility, volume, groundedness) with configurable weights |
 | `ranking/` | Weighted product ranking by rating, review count and completeness |
 | `db/` | SQLAlchemy async models, repository, session, Alembic migrations |
@@ -63,7 +63,7 @@ Settings are loaded from `.env` and validated at startup, so a bad environment f
 | `ANTHROPIC_API_KEY` | Anthropic key (required when provider is `anthropic`) | empty |
 | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_API_VERSION` | Azure OpenAI / Foundry resource (required when provider is `azure`) | empty |
 | `MODEL_EXTRACT`, `MODEL_JUDGE` | Model ids, or Azure deployment names | `gpt-4o-mini` |
-| `MODEL_ESCALATE` | Model used when escalating a retry (not wired yet) | `gpt-4o-mini` |
+| `MODEL_ESCALATE` | Model used when escalating a retry (used from the second retry) | `gpt-4o-mini` |
 | `DATABASE_URL` | Postgres DSN (`postgresql+asyncpg://`) | local compose Postgres (port 5433) |
 | `REDIS_URL` | Redis URL | `redis://localhost:6379` |
 | `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Object storage for raw HTML | local S3 mock |
@@ -113,7 +113,7 @@ The client currently renders a placeholder page.
 
 Open items are tracked as `TODO(next)` comments in the code. The main ones:
 
-- **Phase 5 (remaining):** retry with feedback and model escalation from `evaluate` (the LLM extraction path itself is done), cost tracking in USD
+- **Phase 5 (remaining):** include image URLs in the text the LLM sees (retries ask for images it cannot see), cost tracking in USD
 - **Phase 7:** Redis-backed cross-process rate limiting, conditional GET and caching, circuit breaker, Playwright rendering tier
 - **Phase 8:** Link discovery and navigation across listing pages
 - **Phase 9:** Client scrape form
