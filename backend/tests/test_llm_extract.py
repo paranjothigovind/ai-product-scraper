@@ -165,3 +165,22 @@ async def test_azure_truncated_output_returns_no_products() -> None:
     client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(parse=parse)))
     result = await AzureOpenAIExtractor(client, "m").extract("t", page_url=None)  # type: ignore[arg-type]
     assert result.products == [] and result.tokens_out == 8
+
+
+async def test_invented_urls_are_dropped_before_validation() -> None:
+    class Inventive(FakeExtractor):
+        async def extract(
+            self, text: str, *, page_url: str | None, feedback: str = ""
+        ) -> ExtractionResult:
+            return ExtractionResult(
+                products=[
+                    ExtractedProduct(name="Blue Mug", url=f"{BASE}/p/1", price=12.5),
+                    ExtractedProduct(name="Ghost Mug", url=f"{BASE}/p/made-up", price=1.0),
+                ]
+            )
+
+    h = Harness(ScriptedSite({LIST: PLAIN}), extractor=Inventive())
+    state = await h.run(request(5))
+    assert {p["name"] for p in result_of(state)["products"]} == {"Blue Mug"}
+    extract = next(t for t in state["trace"] if t["node"] == "extract")
+    assert extract["meta"]["ungrounded_dropped"] == 1

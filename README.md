@@ -11,7 +11,7 @@ Scrapes product listings from a URL (or pasted HTML), validates and scores the r
 | `backend/` | Python 3.12 backend (the active codebase) |
 | `client/` | Next.js 15 / React 19 / Tailwind 4 client. Scaffold only: the scrape form is planned for phase 9 |
 | `legacy-ts/` | Earlier TypeScript monorepo (pnpm, Drizzle). Superseded by `backend/` and kept for reference |
-| `docker-compose.yml` | Local infrastructure: Postgres 16, Redis 7, MinIO (S3-compatible) |
+| `docker-compose.yml` | Local infrastructure: Postgres 16 (host port 5433), Redis 7, an S3-compatible store (adobe/s3mock) |
 | `docs/runbooks/` | Placeholder for runbooks |
 
 ## Backend
@@ -41,7 +41,7 @@ Source is in `backend/src/scraper/`:
 ### Setup
 
 ```bash
-# 1. Start infrastructure (Postgres, Redis, MinIO and a bucket with 7-day expiry)
+# 1. Start infrastructure (Postgres, Redis, S3-compatible store with the scraper-html bucket)
 docker compose up -d
 
 # 2. Configure the environment
@@ -64,9 +64,9 @@ Settings are loaded from `.env` and validated at startup, so a bad environment f
 | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_API_VERSION` | Azure OpenAI / Foundry resource (required when provider is `azure`) | empty |
 | `MODEL_EXTRACT`, `MODEL_JUDGE` | Model ids, or Azure deployment names | `gpt-4o-mini` |
 | `MODEL_ESCALATE` | Model used when escalating a retry (not wired yet) | `gpt-4o-mini` |
-| `DATABASE_URL` | Postgres DSN (`postgresql+asyncpg://`) | local compose Postgres |
+| `DATABASE_URL` | Postgres DSN (`postgresql+asyncpg://`) | local compose Postgres (port 5433) |
 | `REDIS_URL` | Redis URL | `redis://localhost:6379` |
-| `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Object storage for raw HTML | local MinIO |
+| `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Object storage for raw HTML | local S3 mock |
 | `MAX_PAGES_TOTAL` | Page cap per run | `50` |
 | `MAX_RETRIES` | Extraction retries | `2` |
 | `MAX_TOKENS_PER_RUN` | Token budget per run | `200000` |

@@ -142,6 +142,7 @@ def make_extract(deps: GraphDeps) -> NodeFn:
         candidates: list[dict[str, Any]] = []
         errors: list[dict[str, Any]] = []
         calls = 0
+        ungrounded = 0
         for chunk in chunk_text(cleaned):
             if budget["tokens_in"] + budget["tokens_out"] >= limit:
                 break  # `guard` stops the run with stop_reason="budget" on its next pass
@@ -162,7 +163,10 @@ def make_extract(deps: GraphDeps) -> NodeFn:
             calls += 1
             budget["tokens_in"] += result.tokens_in
             budget["tokens_out"] += result.tokens_out
-            candidates.extend(to_candidates(result.products))
+            # The model must not invent links: a URL it returns has to appear in the text it saw.
+            grounded = [p for p in result.products if p.url.strip() in chunk]
+            ungrounded += len(result.products) - len(grounded)
+            candidates.extend(to_candidates(grounded))
         update["candidates"] = candidates
         update["budget"] = budget
         if errors:
@@ -173,6 +177,7 @@ def make_extract(deps: GraphDeps) -> NodeFn:
                 in_count=0,
                 out_count=len(candidates),
                 llm_calls=calls,
+                ungrounded_dropped=ungrounded,
                 tokens_in=budget["tokens_in"],
                 tokens_out=budget["tokens_out"],
             ),

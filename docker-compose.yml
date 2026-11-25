@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: scraper
       POSTGRES_PASSWORD: scraper
       POSTGRES_DB: scraper
-    ports: ["5432:5432"]
+    ports: ["5433:5432"]  # 5433 on the host: 5432 is often taken by a local Postgres
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U scraper"]
@@ -21,25 +21,16 @@ services:
       interval: 5s
       retries: 10
 
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
+  # S3-compatible store for raw HTML. MinIO stopped publishing public images, so this uses
+  # adobe/s3mock: any access key works, the bucket is created at startup, and there is no
+  # lifecycle expiry (add one with a real S3 store in production).
+  s3:
+    image: adobe/s3mock:latest
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    ports: ["9000:9000", "9001:9001"]
-    volumes: [miniodata:/data]
-
-  minio-init:
-    image: minio/mc:latest
-    depends_on: [minio]
-    entrypoint: >
-      /bin/sh -c "
-      until mc alias set local http://minio:9000 minioadmin minioadmin; do sleep 1; done;
-      mc mb --ignore-existing local/scraper-html;
-      mc ilm rule add --expire-days 7 local/scraper-html;
-      "
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: scraper-html
+    ports: ["9000:9090"]
+    volumes: [s3data:/s3mockroot]
 
 volumes:
   pgdata:
-  miniodata:
+  s3data:

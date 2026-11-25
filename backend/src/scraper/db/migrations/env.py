@@ -2,6 +2,7 @@ import asyncio
 import os
 
 from alembic import context
+from dotenv import dotenv_values
 from sqlalchemy import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -11,7 +12,10 @@ target_metadata = Base.metadata
 
 
 def _database_url() -> str:
+    # The shell wins; otherwise read .env (repo root or backend/), same as the app does.
     url = os.environ.get("DATABASE_URL")
+    for path in ("../.env", ".env"):
+        url = url or dotenv_values(path).get("DATABASE_URL")
     if not url:
         raise RuntimeError("DATABASE_URL is required")
     return url
